@@ -1,6 +1,6 @@
-# MiniGPT — Character-Level Language Model from Scratch
+# MiniGPT, Character-Level Language Model from Scratch
 
-A from-scratch implementation of a GPT-style decoder-only Transformer in PyTorch, trained on raw text data at the character level. Designed to demonstrate how large language models work internally — from tokenization and embeddings to multi-head self-attention and autoregressive generation.
+A from-scratch implementation of a GPT-style decoder-only Transformer in PyTorch, trained on raw text data at the character level. Designed to demonstrate how large language models work internally, from tokenization and embeddings to multi-head self-attention and autoregressive generation.
 
 ---
 
@@ -50,7 +50,7 @@ pip install torch
 
 ### 1. Prepare your dataset
 
-Place your training corpus as a plain text file named `input.txt` in the project root. The model will automatically build its vocabulary from the characters present in the file.
+Place your training corpus as a plain text file named `input.txt` in the project root (or pass `--input path`). The results below use [Tiny Shakespeare](https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt). The model will automatically build its vocabulary from the characters present in the file.
 
 ```
 project/
@@ -66,16 +66,40 @@ python gpt_lm.py
 
 Training runs for 5,000 iterations by default, printing train/validation loss every 500 steps. On completion, the model generates a 500-character sample to stdout.
 
-### 3. Monitor training
+### 3. Train a smaller model on a CPU
 
-During training, you will see output like:
+The defaults are sized for a GPU. Every size is a flag, so a small model trains on a laptop:
+
+```bash
+python gpt_lm.py --n-embd 128 --n-head 4 --n-layer 4 --block-size 128 \
+  --max-iters 2000 --eval-interval 250 --eval-iters 50
+```
+
+---
+
+## Results
+
+One CPU run of the small config above on Tiny Shakespeare (1.1 MB of text, 0.82M parameters, seed 1337):
 
 ```
-step 0:    train loss 4.2435, val loss 4.2512
-step 500:  train loss 2.1873, val loss 2.2104
-...
-step 4999: train loss 1.4821, val loss 1.6203
+step 0:    train loss 4.1340, val loss 4.1329
+step 500:  train loss 2.2995, val loss 2.3118
+step 1000: train loss 1.8445, val loss 1.9486
+step 1500: train loss 1.6827, val loss 1.8460
+step 1999: train loss 1.6158, val loss 1.8005
 ```
+
+A sample after those 2,000 steps:
+
+```
+Which thert is to to the denamperects thie,
+It with honour untraiship like your and to him.
+
+Cit deather:
+One, brous to too not he witneesent the in's
+```
+
+It has learned line lengths, speaker headings and common short words, and still invents most longer ones. I have not run the full default config (384 dimensions, 6 layers, 5,000 steps), which needs a GPU.
 
 ---
 
@@ -109,11 +133,11 @@ project/
 
 ## How It Works
 
-1. **Tokenization** — Characters are mapped to integer indices using a simple character-level vocabulary built from the input file.
-2. **Embedding** — Each token is embedded into a 384-dimensional vector. Positional embeddings are added to encode sequence order.
-3. **Transformer Blocks** — 6 stacked decoder blocks, each containing multi-head causal self-attention and a feed-forward network, with layer normalization and residual connections.
-4. **Training** — The model is trained via cross-entropy loss on next-character prediction using AdamW, with periodic evaluation on a held-out validation split (10% of data).
-5. **Generation** — Text is generated autoregressively using multinomial sampling from the softmax output distribution.
+1. **Tokenization**, Characters are mapped to integer indices using a simple character-level vocabulary built from the input file.
+2. **Embedding**, Each token is embedded into a 384-dimensional vector. Positional embeddings are added to encode sequence order.
+3. **Transformer Blocks**, 6 stacked decoder blocks, each containing multi-head causal self-attention and a feed-forward network, with layer normalization and residual connections.
+4. **Training**, The model is trained via cross-entropy loss on next-character prediction using AdamW, with periodic evaluation on a held-out validation split (10% of data).
+5. **Generation**, Text is generated autoregressively using multinomial sampling from the softmax output distribution.
 
 ---
 
