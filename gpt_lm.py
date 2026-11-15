@@ -1,24 +1,41 @@
+import argparse
+
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-# Hyperparameters
-batch_size = 32
-block_size = 256 # Also known as context length
-max_iters = 5000
-eval_interval = 500
-learning_rate = 3e-4
+# Hyperparameters. The defaults are the GPU config, pass smaller values to train on a CPU.
+parser = argparse.ArgumentParser()
+parser.add_argument("--input", default="input.txt")
+parser.add_argument("--batch-size", type=int, default=32)
+parser.add_argument("--block-size", type=int, default=256)   # Also known as context length
+parser.add_argument("--max-iters", type=int, default=5000)
+parser.add_argument("--eval-interval", type=int, default=500)
+parser.add_argument("--eval-iters", type=int, default=200)
+parser.add_argument("--lr", type=float, default=3e-4)
+parser.add_argument("--n-embd", type=int, default=384)       # Dimension of the vector embeddings
+parser.add_argument("--n-head", type=int, default=6)         # Number of Self-Attention heads
+parser.add_argument("--n-layer", type=int, default=6)        # Number of decoder blocks
+parser.add_argument("--dropout", type=float, default=0.2)
+parser.add_argument("--sample-tokens", type=int, default=500)
+args = parser.parse_args()
+
+batch_size = args.batch_size
+block_size = args.block_size
+max_iters = args.max_iters
+eval_interval = args.eval_interval
+learning_rate = args.lr
 device = "cuda" if torch.cuda.is_available() else "cpu"
-eval_iters = 200
-n_embd = 384     # Dimension of the vector embeddings
-n_head = 6      # Number of Self-Attention heads    
-n_layer = 6     # Number of blocks (In this case: Number of decoder blocks)
-dropout = 0.2   # 20% of total weights will be set to 0 , for one fwd and back propagation at random to reduce overfitting
+eval_iters = args.eval_iters
+n_embd = args.n_embd
+n_head = args.n_head
+n_layer = args.n_layer
+dropout = args.dropout
 
 torch.manual_seed(1337)
 
 # Loading raw data
-with open("input.txt", "r", encoding="utf-8") as f:
+with open(args.input, "r", encoding="utf-8") as f:
     data = f.read()
 
 # making the Vocab List
@@ -41,7 +58,7 @@ val_data = data[n:]
 def get_batch(split):
 
     data = train_data if split=='train' else val_data
-    ix = torch.randn(len(data)-block_size, (batch_size,))
+    ix = torch.randint(len(data)-block_size, (batch_size,))
     x = torch.stack([data[i:i+block_size] for i in ix])
     y = torch.stack([data[i+1:i+block_size+1] for i in ix])
     x, y =x.to(device), y.to(device)
@@ -81,7 +98,7 @@ class Head(nn.Module):
         q = self.query(x)   # (B,T,hs)
 
         # Computing attention scores (affinities)
-        wei = q @ k.transpose(-2,-1) *k.shape[-1]*0.5   # (B,T,hs) @ (B,hs,T) -> (b,T,T)
+        wei = q @ k.transpose(-2,-1) * k.shape[-1]**-0.5   # (B,T,hs) @ (B,hs,T) -> (b,T,T)
         wei = wei.masked_fill(self.tril[:T,:T] == 0, float('-inf')) # (B,T,T)
         wei = F.softmax(wei, dim=-1)
         wei = self.dropout(wei)
@@ -135,13 +152,13 @@ class Block(nn.Module):
         x = x + self.ffed(self.ln2(x))
         return x
     
-class GPTLanguageModel(nn.Model):
+class GPTLanguageModel(nn.Module):
 
     def __init__(self):
         super().__init__()
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
-        self.positin_embeding_table = nn.Embedding(block_size, n_embd)
-        self.blocks = nn.Sequential([Block(n_embd, n_head) for _ in range(n_layer)])
+        self.position_embedding_table = nn.Embedding(block_size, n_embd)
+        self.blocks = nn.Sequential(*[Block(n_embd, n_head) for _ in range(n_layer)])
         self.ln_f = nn.LayerNorm(n_embd)
         self.lm_head = nn.Linear(n_embd, vocab_size)
 
@@ -160,7 +177,7 @@ class GPTLanguageModel(nn.Model):
         B, T = idx.shape
 
         tok_emb = self.token_embedding_table(idx) # (B,T,C)
-        pos_emb = self.positin_embeding_table(torch.arange(T, device=device)) #(T,C)
+        pos_emb = self.position_embedding_table(torch.arange(T, device=device)) #(T,C)
         x = tok_emb + pos_emb # (B,T,C)
         x = self.blocks(x)    # (B,T,C)
         x = self.ln_f(x)      # (B,T,C)
@@ -212,4 +229,4 @@ for iter in range(max_iters):
 
 # Generate from model
 context = torch.zeros((1,1), dtype=torch.long, device=device)
-print(decode(model.generate(context, max_new_tokens=500)[0].tolist()))
+print(decode(model.generate(context, max_new_tokens=args.sample_tokens)[0].tolist()))
